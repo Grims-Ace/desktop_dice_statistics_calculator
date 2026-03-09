@@ -7,6 +7,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -41,7 +42,17 @@ func (r *barGraphCanvasRenderer) Layout(size fyne.Size) {
 }
 
 func (r *barGraphCanvasRenderer) MinSize() fyne.Size {
-	return fyne.NewSize(900, 550)
+	minWidth := float32(900)
+	if r.graph.stats != nil {
+		outcomes := r.graph.stats.GetSortedOutcomes()
+		// Calculate minimum width required for bars
+		// Assume minimum 25 pixels per bar (including spacing) plus padding
+		requiredWidth := float32(100+20) + float32(len(outcomes))*25
+		if requiredWidth > minWidth {
+			minWidth = requiredWidth
+		}
+	}
+	return fyne.NewSize(minWidth, 550)
 }
 
 func (r *barGraphCanvasRenderer) Refresh() {
@@ -67,13 +78,18 @@ func (r *barGraphCanvasRenderer) Refresh() {
 	leftPadding := float32(100)
 	rightPadding := float32(20)
 
-	graphWidth := float32(900) - leftPadding - rightPadding
-	graphHeight := float32(550) - topPadding - bottomPadding
+	size := r.graph.Size()
+	if size.Width == 0 || size.Height == 0 {
+		size = fyne.NewSize(900, 550)
+	}
+
+	graphWidth := size.Width - leftPadding - rightPadding
+	graphHeight := size.Height - topPadding - bottomPadding
 
 	// Background
 	background := canvas.NewRectangle(color.NRGBA{R: 20, G: 20, B: 20, A: 255})
 	background.Move(fyne.NewPos(0, 0))
-	background.Resize(fyne.NewSize(900, 550))
+	background.Resize(size)
 	r.objects = append(r.objects, background)
 
 	// Y-axis
@@ -222,9 +238,12 @@ func ShowStatisticsWindow(expression string) {
 	// Create the bar graph
 	graph := newBarGraphCanvas(stats)
 
+	// Create scroll container
+	scroll := container.NewScroll(graph)
+
 	// Create and show the window
 	window := fyne.CurrentApp().NewWindow("Statistics: " + expression)
-	window.SetContent(graph)
+	window.SetContent(scroll)
 	window.Resize(fyne.NewSize(900, 550))
 	window.Show()
 }
