@@ -2,11 +2,13 @@ package main
 
 import (
 	"image/color"
+	"math"
 	"unicode/utf8"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/driver/desktop"
+	"fyne.io/fyne/v2/driver/mobile"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
@@ -84,6 +86,8 @@ type customButton2 struct {
 	TextSize   float32
 	Background color.Color
 	Foreground color.Color
+	hovered    bool
+	pressed    bool
 }
 
 func (b *customButton2) CreateRenderer() fyne.WidgetRenderer {
@@ -108,12 +112,37 @@ func (b *customButton2) TappedSecondary(*fyne.PointEvent) {
 }
 
 func (b *customButton2) MouseIn(*desktop.MouseEvent) {
+	b.hovered = true
+	b.Refresh()
 }
 
 func (b *customButton2) MouseOut() {
+	b.hovered = false
+	b.pressed = false
+	b.Refresh()
 }
 
 func (b *customButton2) MouseMoved(*desktop.MouseEvent) {
+}
+
+func (b *customButton2) MouseDown(*desktop.MouseEvent) {
+	b.pressed = true
+	b.Refresh()
+}
+
+func (b *customButton2) MouseUp(*desktop.MouseEvent) {
+	b.pressed = false
+	b.Refresh()
+}
+
+func (b *customButton2) TouchDown(*mobile.TouchEvent) {
+	b.pressed = true
+	b.Refresh()
+}
+
+func (b *customButton2) TouchUp(*mobile.TouchEvent) {
+	b.pressed = false
+	b.Refresh()
 }
 
 type customButton2Renderer struct {
@@ -157,6 +186,18 @@ func (r *customButton2Renderer) Destroy() {
 }
 
 func (b *customButton2) backgroundColor() color.Color {
+	base := b.baseBackgroundColor()
+	switch {
+	case b.pressed:
+		return adjustColorBrightness(base, 0.82)
+	case b.hovered:
+		return adjustColorBrightness(base, 1.12)
+	default:
+		return base
+	}
+}
+
+func (b *customButton2) baseBackgroundColor() color.Color {
 	if b.Background != nil {
 		return b.Background
 	}
@@ -210,6 +251,21 @@ func newCustomButton2WithColors(label string, background, foreground color.Color
 	}
 	b.ExtendBaseWidget(b)
 	return b
+}
+
+func adjustColorBrightness(c color.Color, factor float64) color.Color {
+	r, g, b, a := c.RGBA()
+	return color.NRGBA{
+		R: scaleColorChannel(r, factor),
+		G: scaleColorChannel(g, factor),
+		B: scaleColorChannel(b, factor),
+		A: uint8(a >> 8),
+	}
+}
+
+func scaleColorChannel(channel uint32, factor float64) uint8 {
+	value := float64(channel>>8) * factor
+	return uint8(math.Max(0, math.Min(255, value)))
 }
 
 // customEntry is a custom entry widget with configurable text size

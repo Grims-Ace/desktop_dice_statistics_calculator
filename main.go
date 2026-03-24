@@ -67,6 +67,7 @@ func main() {
 
 	clearHistory := func() {
 		calculations = nil
+		diceInputEntry.SetText("")
 		historyList.Refresh()
 	}
 
