@@ -218,6 +218,15 @@ type customEntry struct {
 	TextSize float32
 }
 
+func (e *customEntry) MinSize() fyne.Size {
+	min := e.Entry.MinSize()
+	targetHeight := e.TextSize * 2.2
+	if min.Height < targetHeight {
+		min.Height = targetHeight
+	}
+	return min
+}
+
 func (e *customEntry) CreateRenderer() fyne.WidgetRenderer {
 	// Call the parent's CreateRenderer to ensure proper initialization
 	renderer := e.Entry.CreateRenderer()
@@ -235,12 +244,6 @@ type customEntryRenderer struct {
 }
 
 func (r *customEntryRenderer) Layout(size fyne.Size) {
-	// Update TextSize on all canvas text objects
-	for _, obj := range r.parentRenderer.Objects() {
-		if text, ok := obj.(*canvas.Text); ok {
-			text.TextSize = r.entry.TextSize
-		}
-	}
 	r.parentRenderer.Layout(size)
 }
 
@@ -249,12 +252,6 @@ func (r *customEntryRenderer) MinSize() fyne.Size {
 }
 
 func (r *customEntryRenderer) Refresh() {
-	// Update TextSize on all canvas text objects
-	for _, obj := range r.parentRenderer.Objects() {
-		if text, ok := obj.(*canvas.Text); ok {
-			text.TextSize = r.entry.TextSize
-		}
-	}
 	r.parentRenderer.Refresh()
 }
 
@@ -426,4 +423,23 @@ func maxUniformButtonTextSize(label string, size fyne.Size) float32 {
 		return maxByWidth
 	}
 	return maxByHeight
+}
+
+type sizeOverrideTheme struct {
+	fyne.Theme
+	textSize float32
+}
+
+func (t *sizeOverrideTheme) Size(name fyne.ThemeSizeName) float32 {
+	if name == theme.SizeNameText {
+		return t.textSize
+	}
+	return t.Theme.Size(name)
+}
+
+func newSizeOverrideTheme(base fyne.Theme, textSize float32) fyne.Theme {
+	return &sizeOverrideTheme{
+		Theme:    base,
+		textSize: textSize,
+	}
 }

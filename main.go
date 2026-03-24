@@ -21,8 +21,10 @@ func main() {
 	var historyList *widget.List
 
 	// Dice input bar
-	diceInputEntry := newCustomEntry(fyne.CurrentApp().Settings().Theme().Size(theme.SizeNameText) * 2)
+	inputTextSize := fyne.CurrentApp().Settings().Theme().Size(theme.SizeNameText) * 2
+	diceInputEntry := newCustomEntry(inputTextSize)
 	diceInputEntry.SetPlaceHolder("e.g., 2d20H, 3d6+5")
+	diceInputContainer := container.NewThemeOverride(diceInputEntry, newSizeOverrideTheme(fyne.CurrentApp().Settings().Theme(), inputTextSize))
 
 	historyList = widget.NewList(
 		func() int {
@@ -202,7 +204,7 @@ func main() {
 	}
 
 	topContent := container.NewBorder(
-		diceInputEntry,
+		diceInputContainer,
 		nil,
 		nil,
 		nil,
