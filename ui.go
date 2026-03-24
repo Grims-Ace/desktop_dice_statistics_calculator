@@ -2,6 +2,7 @@ package main
 
 import (
 	"image/color"
+	"unicode/utf8"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -80,6 +81,9 @@ type customButton2 struct {
 	Text       string
 	OnTapped   func()
 	Importance widget.Importance
+	TextSize   float32
+	Background color.Color
+	Foreground color.Color
 }
 
 func (b *customButton2) CreateRenderer() fyne.WidgetRenderer {
@@ -122,9 +126,12 @@ type customButton2Renderer struct {
 func (r *customButton2Renderer) Layout(size fyne.Size) {
 	r.background.Resize(size)
 	r.text.Resize(size)
-	newTextSize := size.Height * 0.4
-	if size.Width < newTextSize {
-		newTextSize = size.Width * 0.4
+	newTextSize := r.button.TextSize
+	if newTextSize <= 0 {
+		newTextSize = size.Height * 0.4
+		if size.Width < newTextSize {
+			newTextSize = size.Width * 0.4
+		}
 	}
 	r.text.TextSize = newTextSize
 }
@@ -135,6 +142,7 @@ func (r *customButton2Renderer) MinSize() fyne.Size {
 
 func (r *customButton2Renderer) Refresh() {
 	r.text.Text = r.button.Text
+	r.text.TextSize = r.button.TextSize
 	r.text.Color = r.button.textColor()
 	r.text.Refresh()
 	r.background.FillColor = r.button.backgroundColor()
@@ -149,6 +157,9 @@ func (r *customButton2Renderer) Destroy() {
 }
 
 func (b *customButton2) backgroundColor() color.Color {
+	if b.Background != nil {
+		return b.Background
+	}
 	variant := fyne.CurrentApp().Settings().ThemeVariant()
 	switch b.Importance {
 	case widget.HighImportance:
@@ -159,6 +170,9 @@ func (b *customButton2) backgroundColor() color.Color {
 }
 
 func (b *customButton2) textColor() color.Color {
+	if b.Foreground != nil {
+		return b.Foreground
+	}
 	variant := fyne.CurrentApp().Settings().ThemeVariant()
 	switch b.Importance {
 	case widget.HighImportance:
@@ -182,6 +196,17 @@ func newCustomButton2WithImportance(label string, importance widget.Importance, 
 		Text:       label,
 		OnTapped:   onTap,
 		Importance: importance,
+	}
+	b.ExtendBaseWidget(b)
+	return b
+}
+
+func newCustomButton2WithColors(label string, background, foreground color.Color, onTap func()) *customButton2 {
+	b := &customButton2{
+		Text:       label,
+		OnTapped:   onTap,
+		Background: background,
+		Foreground: foreground,
 	}
 	b.ExtendBaseWidget(b)
 	return b
@@ -301,4 +326,104 @@ func (a *aspectRatioLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) 
 
 func (a *aspectRatioLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
 	return fyne.NewSize(10, 10)
+}
+
+type gridSpan struct {
+	row     int
+	col     int
+	rowSpan int
+	colSpan int
+}
+
+type spanGridLayout struct {
+	rows  int
+	cols  int
+	spans map[fyne.CanvasObject]gridSpan
+}
+
+func newSpanGridLayout(rows, cols int, spans map[fyne.CanvasObject]gridSpan) fyne.Layout {
+	return &spanGridLayout{
+		rows:  rows,
+		cols:  cols,
+		spans: spans,
+	}
+}
+
+func (s *spanGridLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	if s.rows <= 0 || s.cols <= 0 {
+		return
+	}
+
+	cellWidth := size.Width / float32(s.cols)
+	cellHeight := size.Height / float32(s.rows)
+	uniformTextSize := float32(0)
+
+	for _, o := range objects {
+		button, ok := o.(*customButton2)
+		if !ok {
+			continue
+		}
+
+		span, ok := s.spans[o]
+		if !ok {
+			continue
+		}
+
+		rowSpan := max(span.rowSpan, 1)
+		colSpan := max(span.colSpan, 1)
+		buttonSize := fyne.NewSize(float32(colSpan)*cellWidth, float32(rowSpan)*cellHeight)
+		candidateSize := maxUniformButtonTextSize(button.Text, buttonSize)
+		if candidateSize <= 0 {
+			continue
+		}
+		if uniformTextSize == 0 || candidateSize < uniformTextSize {
+			uniformTextSize = candidateSize
+		}
+	}
+
+	for _, o := range objects {
+		if button, ok := o.(*customButton2); ok {
+			button.TextSize = uniformTextSize
+		}
+
+		span, ok := s.spans[o]
+		if !ok {
+			continue
+		}
+
+		rowSpan := max(span.rowSpan, 1)
+		colSpan := max(span.colSpan, 1)
+
+		x := float32(span.col) * cellWidth
+		y := float32(span.row) * cellHeight
+		width := float32(colSpan) * cellWidth
+		height := float32(rowSpan) * cellHeight
+
+		o.Move(fyne.NewPos(x, y))
+		o.Resize(fyne.NewSize(width, height))
+	}
+}
+
+func (s *spanGridLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	return fyne.NewSize(10, 10)
+}
+
+func maxUniformButtonTextSize(label string, size fyne.Size) float32 {
+	const (
+		horizontalPaddingFactor = 0.75
+		heightFactor            = 0.42
+		avgCharWidthFactor      = 0.62
+	)
+
+	maxByHeight := size.Height * heightFactor
+	charCount := utf8.RuneCountInString(label)
+	if charCount <= 0 {
+		return maxByHeight
+	}
+
+	maxByWidth := (size.Width * horizontalPaddingFactor) / (float32(charCount) * avgCharWidthFactor)
+	if maxByWidth < maxByHeight {
+		return maxByWidth
+	}
+	return maxByHeight
 }

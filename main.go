@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"image/color"
 	"strconv"
 	"strings"
 
@@ -62,6 +63,11 @@ func main() {
 		}
 	}
 
+	clearHistory := func() {
+		calculations = nil
+		historyList.Refresh()
+	}
+
 	// Roll button
 	rollButton := newCustomButton2WithImportance("ROLL", widget.HighImportance, roll)
 
@@ -69,87 +75,129 @@ func main() {
 		roll()
 	}
 
-	buttons := []fyne.CanvasObject{
-		newCustomButton2("H", func() {
-			diceInputEntry.SetText(diceInputEntry.Text + "H")
-		}),
-		newCustomButton2("dX", func() {
-			diceInputEntry.SetText(diceInputEntry.Text + "d")
-		}),
-		newCustomButton2("d4", func() {
-			diceInputEntry.SetText(diceInputEntry.Text + "d4")
-		}),
-		newCustomButton2("d6", func() {
-			diceInputEntry.SetText(diceInputEntry.Text + "d6")
-		}),
-		newCustomButton2("d8", func() {
-			diceInputEntry.SetText(diceInputEntry.Text + "d8")
-		}),
-		newCustomButton2("L", func() {
-			diceInputEntry.SetText(diceInputEntry.Text + "L")
-		}),
-		newCustomButton2("d10", func() {
-			diceInputEntry.SetText(diceInputEntry.Text + "d10")
-		}),
-		newCustomButton2("d12", func() {
-			diceInputEntry.SetText(diceInputEntry.Text + "d12")
-		}),
-		newCustomButton2("d20", func() {
-			diceInputEntry.SetText(diceInputEntry.Text + "d20")
-		}),
-		newCustomButton2("d100", func() {
-			diceInputEntry.SetText(diceInputEntry.Text + "d100")
-		}),
-		createCalcButton("7", diceInputEntry),
-		createCalcButton("8", diceInputEntry),
-		createCalcButton("9", diceInputEntry),
-		newCustomButton2("*", func() {
-			diceInputEntry.SetText(diceInputEntry.Text + "*")
-		}),
-		newCustomButton2("BKSP", func() {
-			text := diceInputEntry.Text
-			if len(text) > 0 {
-				diceInputEntry.SetText(text[:len(text)-1])
-			}
-		}),
-		createCalcButton("4", diceInputEntry),
-		createCalcButton("5", diceInputEntry),
-		createCalcButton("6", diceInputEntry),
-		newCustomButton2("/", func() {
-			diceInputEntry.SetText(diceInputEntry.Text + "/")
-		}),
-		newCustomButton2("C", func() {
-			diceInputEntry.SetText("")
-		}),
-		createCalcButton("1", diceInputEntry),
-		createCalcButton("2", diceInputEntry),
-		createCalcButton("3", diceInputEntry),
-		newCustomButton2("+", func() {
-			diceInputEntry.SetText(diceInputEntry.Text + "+")
-		}),
-		newCustomButton2("📊", func() {
-			diceInput := strings.TrimSpace(diceInputEntry.Text)
-			if diceInput == "" {
-				return
-			}
-			ShowStatisticsWindow(diceInput)
-			roll()
-		}),
-		newCustomButton2(".", func() {
-			diceInputEntry.SetText(diceInputEntry.Text + ".")
-		}),
-		createCalcButton("0", diceInputEntry),
-		newCustomButton2("^", func() {
-			diceInputEntry.SetText(diceInputEntry.Text + "^")
-		}),
-		newCustomButton2("-", func() {
-			diceInputEntry.SetText(diceInputEntry.Text + "-")
-		}),
-		rollButton,
+	graphButton := newCustomButton2WithColors("📊", color.NRGBA{R: 46, G: 160, B: 67, A: 255}, color.White, func() {
+		diceInput := strings.TrimSpace(diceInputEntry.Text)
+		if diceInput == "" {
+			return
+		}
+		ShowStatisticsWindow(diceInput)
+		roll()
+	})
+
+	lButton := newCustomButton2("L", func() {
+		diceInputEntry.SetText(diceInputEntry.Text + "L")
+	})
+	hButton := newCustomButton2("H", func() {
+		diceInputEntry.SetText(diceInputEntry.Text + "H")
+	})
+	dxButton := newCustomButton2("dX", func() {
+		diceInputEntry.SetText(diceInputEntry.Text + "d")
+	})
+	d4Button := newCustomButton2("d4", func() {
+		diceInputEntry.SetText(diceInputEntry.Text + "d4")
+	})
+	d6Button := newCustomButton2("d6", func() {
+		diceInputEntry.SetText(diceInputEntry.Text + "d6")
+	})
+	d8Button := newCustomButton2("d8", func() {
+		diceInputEntry.SetText(diceInputEntry.Text + "d8")
+	})
+	d10Button := newCustomButton2("d10", func() {
+		diceInputEntry.SetText(diceInputEntry.Text + "d10")
+	})
+	d12Button := newCustomButton2("d12", func() {
+		diceInputEntry.SetText(diceInputEntry.Text + "d12")
+	})
+	d20Button := newCustomButton2("d20", func() {
+		diceInputEntry.SetText(diceInputEntry.Text + "d20")
+	})
+	d100Button := newCustomButton2("d100", func() {
+		diceInputEntry.SetText(diceInputEntry.Text + "d100")
+	})
+	sevenButton := createCalcButton("7", diceInputEntry)
+	eightButton := createCalcButton("8", diceInputEntry)
+	nineButton := createCalcButton("9", diceInputEntry)
+	fourButton := createCalcButton("4", diceInputEntry)
+	fiveButton := createCalcButton("5", diceInputEntry)
+	sixButton := createCalcButton("6", diceInputEntry)
+	oneButton := createCalcButton("1", diceInputEntry)
+	twoButton := createCalcButton("2", diceInputEntry)
+	threeButton := createCalcButton("3", diceInputEntry)
+	zeroButton := createCalcButton("0", diceInputEntry)
+	multiplyButton := newCustomButton2("*", func() {
+		diceInputEntry.SetText(diceInputEntry.Text + "*")
+	})
+	backspaceButton := newCustomButton2("BKSP", func() {
+		text := diceInputEntry.Text
+		if len(text) > 0 {
+			diceInputEntry.SetText(text[:len(text)-1])
+		}
+	})
+	divideButton := newCustomButton2("/", func() {
+		diceInputEntry.SetText(diceInputEntry.Text + "/")
+	})
+	clearButton := newCustomButton2("C", func() {
+		diceInputEntry.SetText("")
+	})
+	addButton := newCustomButton2("+", func() {
+		diceInputEntry.SetText(diceInputEntry.Text + "+")
+	})
+	acButton := newCustomButton2WithColors("AC", color.NRGBA{R: 198, G: 40, B: 40, A: 255}, color.White, clearHistory)
+	decimalButton := newCustomButton2(".", func() {
+		diceInputEntry.SetText(diceInputEntry.Text + ".")
+	})
+	powerButton := newCustomButton2("^", func() {
+		diceInputEntry.SetText(diceInputEntry.Text + "^")
+	})
+	subtractButton := newCustomButton2("-", func() {
+		diceInputEntry.SetText(diceInputEntry.Text + "-")
+	})
+
+	keypadButtons := []fyne.CanvasObject{
+		lButton, hButton, dxButton, d4Button, d6Button, graphButton,
+		d8Button, d10Button, d12Button, d20Button, d100Button,
+		sevenButton, eightButton, nineButton, multiplyButton, backspaceButton, rollButton,
+		fourButton, fiveButton, sixButton, divideButton, clearButton,
+		oneButton, twoButton, threeButton, addButton, acButton,
+		decimalButton, zeroButton, powerButton, subtractButton,
 	}
 
-	buttonsContainer := container.New(newAspectRatioLayout(3.0/2.0, 7, 5))
-	for _, button := range buttons {
+	buttonSpans := map[fyne.CanvasObject]gridSpan{
+		lButton:         {row: 0, col: 0, rowSpan: 1, colSpan: 1},
+		hButton:         {row: 0, col: 1, rowSpan: 1, colSpan: 1},
+		dxButton:        {row: 0, col: 2, rowSpan: 1, colSpan: 1},
+		d4Button:        {row: 0, col: 3, rowSpan: 1, colSpan: 1},
+		d6Button:        {row: 0, col: 4, rowSpan: 1, colSpan: 1},
+		graphButton:     {row: 0, col: 5, rowSpan: 2, colSpan: 1},
+		d8Button:        {row: 1, col: 0, rowSpan: 1, colSpan: 1},
+		d10Button:       {row: 1, col: 1, rowSpan: 1, colSpan: 1},
+		d12Button:       {row: 1, col: 2, rowSpan: 1, colSpan: 1},
+		d20Button:       {row: 1, col: 3, rowSpan: 1, colSpan: 1},
+		d100Button:      {row: 1, col: 4, rowSpan: 1, colSpan: 1},
+		sevenButton:     {row: 2, col: 0, rowSpan: 1, colSpan: 1},
+		eightButton:     {row: 2, col: 1, rowSpan: 1, colSpan: 1},
+		nineButton:      {row: 2, col: 2, rowSpan: 1, colSpan: 1},
+		multiplyButton:  {row: 2, col: 3, rowSpan: 1, colSpan: 1},
+		backspaceButton: {row: 2, col: 4, rowSpan: 1, colSpan: 1},
+		rollButton:      {row: 2, col: 5, rowSpan: 4, colSpan: 1},
+		fourButton:      {row: 3, col: 0, rowSpan: 1, colSpan: 1},
+		fiveButton:      {row: 3, col: 1, rowSpan: 1, colSpan: 1},
+		sixButton:       {row: 3, col: 2, rowSpan: 1, colSpan: 1},
+		divideButton:    {row: 3, col: 3, rowSpan: 1, colSpan: 1},
+		clearButton:     {row: 3, col: 4, rowSpan: 1, colSpan: 1},
+		oneButton:       {row: 4, col: 0, rowSpan: 1, colSpan: 1},
+		twoButton:       {row: 4, col: 1, rowSpan: 1, colSpan: 1},
+		threeButton:     {row: 4, col: 2, rowSpan: 1, colSpan: 1},
+		addButton:       {row: 4, col: 3, rowSpan: 1, colSpan: 1},
+		acButton:        {row: 4, col: 4, rowSpan: 2, colSpan: 1},
+		decimalButton:   {row: 5, col: 0, rowSpan: 1, colSpan: 1},
+		zeroButton:      {row: 5, col: 1, rowSpan: 1, colSpan: 1},
+		powerButton:     {row: 5, col: 2, rowSpan: 1, colSpan: 1},
+		subtractButton:  {row: 5, col: 3, rowSpan: 1, colSpan: 1},
+	}
+
+	buttonsContainer := container.New(newSpanGridLayout(6, 6, buttonSpans))
+	for _, button := range keypadButtons {
 		buttonsContainer.Add(button)
 	}
 
