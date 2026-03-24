@@ -56,11 +56,7 @@ func (r *barGraphCanvasRenderer) Refresh() {
 	outcomes := stats.GetSortedOutcomes()
 	maxPercentage := stats.GetMaxPercentage()
 
-	// Round up maxPercentage to nearest 5%
-	roundedMaxPercent := math.Ceil(maxPercentage/5) * 5
-	if roundedMaxPercent < 5 {
-		roundedMaxPercent = 5
-	}
+	axisMaxPercent, tickStep := calculateYAxisScale(maxPercentage)
 
 	size := r.graph.Size()
 	if size.Width == 0 || size.Height == 0 {
@@ -135,11 +131,11 @@ func (r *barGraphCanvasRenderer) Refresh() {
 	r.objects = append(r.objects, xLabel)
 
 	// Y-axis tick marks and labels
-	numYTicks := int(roundedMaxPercent/5) + 1
+	numYTicks := int(math.Round(axisMaxPercent / tickStep))
 	for i := 0; i <= numYTicks; i++ {
-		percent := float64(i) * 5
+		percent := float64(i) * tickStep
 
-		yPos := topPadding + graphHeight - (float32(percent/roundedMaxPercent) * graphHeight)
+		yPos := topPadding + graphHeight - (float32(percent/axisMaxPercent) * graphHeight)
 
 		// Tick mark
 		tick := canvas.NewLine(color.White)
@@ -149,7 +145,7 @@ func (r *barGraphCanvasRenderer) Refresh() {
 		r.objects = append(r.objects, tick)
 
 		// Label
-		label := canvas.NewText(fmt.Sprintf("%.0f%%", percent), color.White)
+		label := canvas.NewText(formatPercentLabel(percent), color.White)
 		label.TextSize = tickTextSize
 		label.Move(fyne.NewPos(leftPadding-50, yPos-7))
 		r.objects = append(r.objects, label)
@@ -171,7 +167,7 @@ func (r *barGraphCanvasRenderer) Refresh() {
 		percentage := stats.Percentages[value]
 
 		// Bar height proportional to percentage
-		barHeight := (float32(percentage) / float32(roundedMaxPercent)) * graphHeight
+		barHeight := (float32(percentage) / float32(axisMaxPercent)) * graphHeight
 
 		// X position
 		xPos := leftPadding + barSpacing + float32(i)*(barWidth+barSpacing)
@@ -226,6 +222,40 @@ func calculateLabelStep(graphWidth float32, numBars int) int {
 		labelStep = 1
 	}
 	return labelStep
+}
+
+func calculateYAxisScale(maxPercentage float64) (axisMax float64, tickStep float64) {
+	if maxPercentage <= 0 {
+		return 1, 0.2
+	}
+
+	targetTicks := 5.0
+	rawStep := maxPercentage / targetTicks
+	magnitude := math.Pow(10, math.Floor(math.Log10(rawStep)))
+	normalized := rawStep / magnitude
+
+	switch {
+	case normalized <= 1:
+		tickStep = 1 * magnitude
+	case normalized <= 2:
+		tickStep = 2 * magnitude
+	case normalized <= 2.5:
+		tickStep = 2.5 * magnitude
+	case normalized <= 5:
+		tickStep = 5 * magnitude
+	default:
+		tickStep = 10 * magnitude
+	}
+
+	axisMax = math.Ceil(maxPercentage/tickStep) * tickStep
+	return axisMax, tickStep
+}
+
+func formatPercentLabel(percent float64) string {
+	if math.Abs(percent-math.Round(percent)) < 0.0001 {
+		return fmt.Sprintf("%.0f%%", percent)
+	}
+	return fmt.Sprintf("%.1f%%", percent)
 }
 
 func (r *barGraphCanvasRenderer) Objects() []fyne.CanvasObject {
