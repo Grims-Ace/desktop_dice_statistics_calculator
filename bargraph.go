@@ -11,34 +11,77 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// barGraphCanvas is a custom widget that renders a bar graph
+// barGraphCanvas is a custom widget that renders a bar graph.
 type barGraphCanvas struct {
 	widget.BaseWidget
 	stats *DiceStatistics
 }
 
 func newBarGraphCanvas(stats *DiceStatistics) *barGraphCanvas {
-	graph := &barGraphCanvas{
-		stats: stats,
-	}
+	graph := &barGraphCanvas{stats: stats}
 	graph.ExtendBaseWidget(graph)
 	return graph
 }
 
 func (b *barGraphCanvas) CreateRenderer() fyne.WidgetRenderer {
 	b.ExtendBaseWidget(b)
-	return &barGraphCanvasRenderer{
-		graph: b,
+
+	background := canvas.NewRectangle(color.NRGBA{R: 20, G: 20, B: 20, A: 255})
+	yAxisLine := canvas.NewLine(color.White)
+	yAxisLine.StrokeWidth = 2
+	xAxisLine := canvas.NewLine(color.White)
+	xAxisLine.StrokeWidth = 2
+	title := canvas.NewText("Probability Distribution", color.White)
+	statsLine1 := canvas.NewText("", color.White)
+	statsLine2 := canvas.NewText("", color.White)
+	yLabel := canvas.NewText("Probability (%)", color.White)
+	xLabel := canvas.NewText("Result Value", color.White)
+
+	renderer := &barGraphCanvasRenderer{
+		graph:      b,
+		background: background,
+		yAxisLine:  yAxisLine,
+		xAxisLine:  xAxisLine,
+		title:      title,
+		statsLine1: statsLine1,
+		statsLine2: statsLine2,
+		yLabel:     yLabel,
+		xLabel:     xLabel,
+		objects: []fyne.CanvasObject{
+			background,
+			yAxisLine,
+			xAxisLine,
+			title,
+			statsLine1,
+			statsLine2,
+			yLabel,
+			xLabel,
+		},
 	}
+
+	renderer.Refresh()
+	return renderer
 }
 
 type barGraphCanvasRenderer struct {
-	graph   *barGraphCanvas
-	objects []fyne.CanvasObject
+	graph       *barGraphCanvas
+	background  *canvas.Rectangle
+	yAxisLine   *canvas.Line
+	xAxisLine   *canvas.Line
+	title       *canvas.Text
+	statsLine1  *canvas.Text
+	statsLine2  *canvas.Text
+	yLabel      *canvas.Text
+	xLabel      *canvas.Text
+	yTicks      []*canvas.Line
+	yTickLabels []*canvas.Text
+	bars        []*canvas.Rectangle
+	barLabels   []*canvas.Text
+	objects     []fyne.CanvasObject
 }
 
 func (r *barGraphCanvasRenderer) Layout(size fyne.Size) {
-	r.Refresh()
+	r.layout(size)
 }
 
 func (r *barGraphCanvasRenderer) MinSize() fyne.Size {
@@ -46,24 +89,75 @@ func (r *barGraphCanvasRenderer) MinSize() fyne.Size {
 }
 
 func (r *barGraphCanvasRenderer) Refresh() {
-	r.objects = []fyne.CanvasObject{}
-
-	if r.graph.stats == nil || len(r.graph.stats.Results) == 0 {
+	stats := r.graph.stats
+	if stats == nil || len(stats.Results) == 0 {
+		r.hideAllButBackground()
+		r.background.Show()
+		r.background.Refresh()
 		return
 	}
 
-	stats := r.graph.stats
-	outcomes := stats.GetSortedOutcomes()
-	maxPercentage := stats.GetMaxPercentage()
-
-	axisMaxPercent, tickStep := calculateYAxisScale(maxPercentage)
-
+	r.background.Show()
+	r.syncData(stats)
 	size := r.graph.Size()
 	if size.Width == 0 || size.Height == 0 {
 		size = fyne.NewSize(900, 550)
 	}
+	r.layout(size)
+}
 
-	// Padding and typography scale with the available area so the graph fits the window.
+func (r *barGraphCanvasRenderer) syncData(stats *DiceStatistics) {
+	r.title.Show()
+	r.statsLine1.Show()
+	r.statsLine2.Show()
+	r.yLabel.Show()
+	r.xLabel.Show()
+	r.yAxisLine.Show()
+	r.xAxisLine.Show()
+
+	r.statsLine1.Text = fmt.Sprintf("Range: %d to %d  |  Total Outcomes: %s", stats.MinValue, stats.MaxValue, stats.TotalOutcomesText)
+	r.statsLine2.Text = fmt.Sprintf("Average: %.2f  |  Most Common: %d", stats.Average, stats.MostCommon)
+
+	axisMaxPercent, tickStep := calculateYAxisScale(stats.GetMaxPercentage())
+	numYTicks := int(math.Round(axisMaxPercent / tickStep))
+	r.ensureYTicks(numYTicks + 1)
+	for i := 0; i <= numYTicks; i++ {
+		percent := float64(i) * tickStep
+		r.yTicks[i].Show()
+		r.yTickLabels[i].Text = formatPercentLabel(percent)
+		r.yTickLabels[i].Show()
+	}
+	for i := numYTicks + 1; i < len(r.yTicks); i++ {
+		r.yTicks[i].Hide()
+		r.yTickLabels[i].Hide()
+	}
+
+	outcomes := stats.GetSortedOutcomes()
+	r.ensureBars(len(outcomes))
+	for i := range outcomes {
+		r.bars[i].Show()
+		r.barLabels[i].Hide()
+	}
+	for i := len(outcomes); i < len(r.bars); i++ {
+		r.bars[i].Hide()
+		r.barLabels[i].Hide()
+	}
+
+	r.refreshObjects()
+}
+
+func (r *barGraphCanvasRenderer) layout(size fyne.Size) {
+	r.background.Move(fyne.NewPos(0, 0))
+	r.background.Resize(size)
+
+	stats := r.graph.stats
+	if stats == nil || len(stats.Results) == 0 {
+		return
+	}
+
+	axisMaxPercent, tickStep := calculateYAxisScale(stats.GetMaxPercentage())
+	outcomes := stats.GetSortedOutcomes()
+
 	topPadding := clamp(size.Height*0.14, 48, 75)
 	bottomPadding := clamp(size.Height*0.15, 56, 80)
 	leftPadding := clamp(size.Width*0.12, 60, 100)
@@ -80,79 +174,43 @@ func (r *barGraphCanvasRenderer) Refresh() {
 	labelTextSize := clamp(size.Height*0.022, 10, 12)
 	tickTextSize := clamp(size.Height*0.018, 8, 10)
 
-	// Background
-	background := canvas.NewRectangle(color.NRGBA{R: 20, G: 20, B: 20, A: 255})
-	background.Move(fyne.NewPos(0, 0))
-	background.Resize(size)
-	r.objects = append(r.objects, background)
+	r.yAxisLine.Move(fyne.NewPos(leftPadding, topPadding))
+	r.yAxisLine.Resize(fyne.NewSize(0, graphHeight))
+	r.xAxisLine.Move(fyne.NewPos(leftPadding, topPadding+graphHeight))
+	r.xAxisLine.Resize(fyne.NewSize(graphWidth, 0))
 
-	// Y-axis
-	yAxisLine := canvas.NewLine(color.White)
-	yAxisLine.StrokeWidth = 2
-	yAxisLine.Move(fyne.NewPos(leftPadding, topPadding))
-	yAxisLine.Resize(fyne.NewSize(0, graphHeight))
-	r.objects = append(r.objects, yAxisLine)
+	r.title.TextSize = titleSize
+	r.title.Move(fyne.NewPos(leftPadding, 5))
 
-	// X-axis
-	xAxisLine := canvas.NewLine(color.White)
-	xAxisLine.StrokeWidth = 2
-	xAxisLine.Move(fyne.NewPos(leftPadding, topPadding+graphHeight))
-	xAxisLine.Resize(fyne.NewSize(graphWidth, 0))
-	r.objects = append(r.objects, xAxisLine)
+	r.statsLine1.TextSize = bodyTextSize
+	r.statsLine1.Move(fyne.NewPos(leftPadding, 5+r.title.MinSize().Height))
 
-	// Title
-	title := canvas.NewText("Probability Distribution", color.White)
-	title.TextSize = titleSize
-	title.Move(fyne.NewPos(leftPadding, 5))
-	r.objects = append(r.objects, title)
+	r.statsLine2.TextSize = bodyTextSize
+	r.statsLine2.Move(fyne.NewPos(leftPadding, 5+r.title.MinSize().Height+r.statsLine1.MinSize().Height))
 
-	// Statistics info line 1
-	statsLine1 := canvas.NewText(fmt.Sprintf("Range: %d to %d  |  Total Outcomes: %d", stats.MinValue, stats.MaxValue, stats.Total), color.White)
-	statsLine1.TextSize = bodyTextSize
-	statsLine1.Move(fyne.NewPos(leftPadding, 5+title.MinSize().Height))
-	r.objects = append(r.objects, statsLine1)
+	r.yLabel.TextSize = labelTextSize
+	r.yLabel.Move(fyne.NewPos(clamp(leftPadding*0.15, 8, 15), topPadding+graphHeight/2-r.yLabel.MinSize().Height/2))
 
-	// Statistics info line 2
-	statsLine2 := canvas.NewText(fmt.Sprintf("Average: %.2f  |  Most Common: %d", stats.Average, stats.MostCommon), color.White)
-	statsLine2.TextSize = bodyTextSize
-	statsLine2.Move(fyne.NewPos(leftPadding, 5+title.MinSize().Height+statsLine1.MinSize().Height))
-	r.objects = append(r.objects, statsLine2)
+	r.xLabel.TextSize = labelTextSize
+	r.xLabel.Move(fyne.NewPos(leftPadding+graphWidth/2-r.xLabel.MinSize().Width/2, topPadding+graphHeight+clamp(bottomPadding*0.35, 18, 28)))
 
-	// Y-axis label
-	yLabel := canvas.NewText("Probability (%)", color.White)
-	yLabel.TextSize = labelTextSize
-	yLabel.Move(fyne.NewPos(clamp(leftPadding*0.15, 8, 15), topPadding+graphHeight/2-yLabel.MinSize().Height/2))
-	r.objects = append(r.objects, yLabel)
-
-	// X-axis label
-	xLabel := canvas.NewText("Result Value", color.White)
-	xLabel.TextSize = labelTextSize
-	xLabel.Move(fyne.NewPos(leftPadding+graphWidth/2-xLabel.MinSize().Width/2, topPadding+graphHeight+clamp(bottomPadding*0.35, 18, 28)))
-	r.objects = append(r.objects, xLabel)
-
-	// Y-axis tick marks and labels
 	numYTicks := int(math.Round(axisMaxPercent / tickStep))
-	for i := 0; i <= numYTicks; i++ {
+	for i := 0; i <= numYTicks && i < len(r.yTicks); i++ {
 		percent := float64(i) * tickStep
-
 		yPos := topPadding + graphHeight - (float32(percent/axisMaxPercent) * graphHeight)
 
-		// Tick mark
-		tick := canvas.NewLine(color.White)
-		tick.StrokeWidth = 1
-		tick.Move(fyne.NewPos(leftPadding-5, yPos))
-		tick.Resize(fyne.NewSize(5, 0))
-		r.objects = append(r.objects, tick)
-
-		// Label
-		label := canvas.NewText(formatPercentLabel(percent), color.White)
-		label.TextSize = tickTextSize
-		label.Move(fyne.NewPos(leftPadding-50, yPos-7))
-		r.objects = append(r.objects, label)
+		r.yTicks[i].Move(fyne.NewPos(leftPadding-5, yPos))
+		r.yTicks[i].Resize(fyne.NewSize(5, 0))
+		r.yTickLabels[i].TextSize = tickTextSize
+		r.yTickLabels[i].Move(fyne.NewPos(leftPadding-50, yPos-7))
 	}
 
-	// Draw bars
 	numBars := len(outcomes)
+	if numBars == 0 {
+		r.refreshObjects()
+		return
+	}
+
 	barSpacing := float32(2)
 	totalSpacing := float32(numBars+1) * barSpacing
 	barWidth := (graphWidth - totalSpacing) / float32(numBars)
@@ -160,45 +218,77 @@ func (r *barGraphCanvasRenderer) Refresh() {
 		barWidth = 1
 	}
 
-	// Calculate label step to prevent overlapping
 	labelStep := calculateLabelStep(graphWidth, numBars)
-
 	for i, value := range outcomes {
 		percentage := stats.Percentages[value]
-
-		// Bar height proportional to percentage
 		barHeight := (float32(percentage) / float32(axisMaxPercent)) * graphHeight
-
-		// X position
 		xPos := leftPadding + barSpacing + float32(i)*(barWidth+barSpacing)
 
-		// Draw bar
-		bar := canvas.NewRectangle(color.NRGBA{R: 100, G: 180, B: 255, A: 255})
-		bar.Move(fyne.NewPos(xPos, topPadding+graphHeight-barHeight))
-		bar.Resize(fyne.NewSize(barWidth, barHeight))
-		r.objects = append(r.objects, bar)
+		r.bars[i].Move(fyne.NewPos(xPos, topPadding+graphHeight-barHeight))
+		r.bars[i].Resize(fyne.NewSize(barWidth, barHeight))
 
-		// X-axis label
-		// Always show first and last label
-		isFirst := i == 0
-		isLast := i == numBars-1
-
-		// Determine if we should show this intermediate label
-		// We show it if it matches the step, BUT we also need to make sure it doesn't clash with the last label
-		// So if we are very close to the end, don't show it (unless it IS the end)
-		showIntermediate := i%labelStep == 0 && i < numBars-labelStep
-
-		if isFirst || isLast || showIntermediate {
-			label := canvas.NewText(fmt.Sprintf("%d", value), color.White)
-			label.TextSize = tickTextSize
-
-			// Center label under bar
-			label.Alignment = fyne.TextAlignCenter
-			label.Move(fyne.NewPos(xPos+barWidth/2-label.MinSize().Width/2, topPadding+graphHeight+10))
-
-			r.objects = append(r.objects, label)
+		r.barLabels[i].TextSize = tickTextSize
+		r.barLabels[i].Alignment = fyne.TextAlignCenter
+		if i == 0 || i == numBars-1 || (labelStep > 0 && i%labelStep == 0 && i < numBars-labelStep) {
+			r.barLabels[i].Text = fmt.Sprintf("%d", value)
+			r.barLabels[i].Show()
+			r.barLabels[i].Move(fyne.NewPos(xPos+barWidth/2-r.barLabels[i].MinSize().Width/2, topPadding+graphHeight+10))
+		} else {
+			r.barLabels[i].Hide()
 		}
 	}
+
+	r.refreshObjects()
+}
+
+func (r *barGraphCanvasRenderer) ensureYTicks(count int) {
+	for len(r.yTicks) < count {
+		tick := canvas.NewLine(color.White)
+		tick.StrokeWidth = 1
+		label := canvas.NewText("", color.White)
+		r.yTicks = append(r.yTicks, tick)
+		r.yTickLabels = append(r.yTickLabels, label)
+		r.objects = append(r.objects, tick, label)
+	}
+}
+
+func (r *barGraphCanvasRenderer) ensureBars(count int) {
+	for len(r.bars) < count {
+		bar := canvas.NewRectangle(color.NRGBA{R: 100, G: 180, B: 255, A: 255})
+		label := canvas.NewText("", color.White)
+		r.bars = append(r.bars, bar)
+		r.barLabels = append(r.barLabels, label)
+		r.objects = append(r.objects, bar, label)
+	}
+}
+
+func (r *barGraphCanvasRenderer) availableGraphWidth() float32 {
+	size := r.graph.Size()
+	if size.Width == 0 {
+		size.Width = 900
+	}
+	leftPadding := clamp(size.Width*0.12, 60, 100)
+	rightPadding := clamp(size.Width*0.03, 16, 24)
+	return size.Width - leftPadding - rightPadding
+}
+
+func (r *barGraphCanvasRenderer) hideAllButBackground() {
+	for _, object := range r.objects {
+		object.Hide()
+	}
+}
+
+func (r *barGraphCanvasRenderer) refreshObjects() {
+	for _, object := range r.objects {
+		object.Refresh()
+	}
+}
+
+func (r *barGraphCanvasRenderer) Objects() []fyne.CanvasObject {
+	return r.objects
+}
+
+func (r *barGraphCanvasRenderer) Destroy() {
 }
 
 func clamp(value, minValue, maxValue float32) float32 {
@@ -212,7 +302,7 @@ func clamp(value, minValue, maxValue float32) float32 {
 }
 
 func calculateLabelStep(graphWidth float32, numBars int) int {
-	labelWidthEstimate := float32(35) // Estimate width of a label
+	labelWidthEstimate := float32(35)
 	maxLabels := int(graphWidth / labelWidthEstimate)
 	if maxLabels < 1 {
 		maxLabels = 1
@@ -258,14 +348,7 @@ func formatPercentLabel(percent float64) string {
 	return fmt.Sprintf("%.1f%%", percent)
 }
 
-func (r *barGraphCanvasRenderer) Objects() []fyne.CanvasObject {
-	return r.objects
-}
-
-func (r *barGraphCanvasRenderer) Destroy() {
-}
-
-// ShowStatisticsWindow creates and shows a statistics window for the given expression
+// ShowStatisticsWindow creates and shows a statistics window for the given expression.
 func ShowStatisticsWindow(expression string) {
 	stats, err := CalculateDiceStatistics(expression)
 	if err != nil {
@@ -273,10 +356,8 @@ func ShowStatisticsWindow(expression string) {
 		return
 	}
 
-	// Create the bar graph
 	graph := newBarGraphCanvas(stats)
 
-	// Create and show the window
 	window := fyne.CurrentApp().NewWindow("Statistics: " + expression)
 	window.SetContent(container.NewMax(graph))
 	window.Resize(fyne.NewSize(900, 550))
