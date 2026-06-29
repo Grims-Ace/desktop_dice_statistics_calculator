@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"gonum.org/v1/gonum/stat"
 )
 
 // DiceStatistics holds the theoretical statistics for a dice roll.
@@ -590,6 +592,10 @@ func (s *DiceStatistics) populateDerivedFields() {
 	s.SortedOutcomes = make([]int, 0, len(s.Results))
 	s.Percentages = make(map[int]float64, len(s.Results))
 
+	// Prepare data for weighted mean calculation using gonum
+	outcomes := make([]float64, 0, len(s.Results))
+	weights := make([]float64, 0, len(s.Results))
+
 	first := true
 	maxProbability := 0.0
 	for value, probability := range s.Results {
@@ -610,12 +616,19 @@ func (s *DiceStatistics) populateDerivedFields() {
 			}
 		}
 
-		s.Average += float64(value) * probability
+		// Collect data for weighted mean calculation
+		outcomes = append(outcomes, float64(value))
+		weights = append(weights, probability)
+
+		// Mode: find outcome with highest probability
 		if probability > maxProbability || (math.Abs(probability-maxProbability) <= probabilityEpsilon && value < s.MostCommon) {
 			maxProbability = probability
 			s.MostCommon = value
 		}
 	}
+
+	// Calculate weighted mean using gonum/stat
+	s.Average = stat.Mean(outcomes, weights)
 
 	sort.Ints(s.SortedOutcomes)
 	s.MaxPercentage = maxProbability * 100
